@@ -1,0 +1,254 @@
+---
+title: "line_profiler for python"
+author: "Lukas Weilguny"
+date: "January 21st, 2021"
+output:
+  ioslides_presentation:
+    highlight: pygments
+    widescreen: true
+    smaller: true
+    theme: darkly
+---
+
+<style>
+slides > slide {
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+}
+</style>
+
+
+
+## Tools for easy optimisation of Pyhon {.build}
+
+
+**Caveats**:
+
+_"Premature optimization is the root of all evil"_ - Donald Knuth, 1974
+
+- How fast does your code need to be?
+
+- How much readability & maintainability are you trading-off?
+
+**But**:
+
+- Crucial for some applications
+
+- Faster development time, less time waiting for programs to finish
+
+- Using fewer resources (http://www.green-algorithms.org/)
+
+
+## Line Profiling in Python {.build}
+
+- Most often *99% of code is irrelevant to performance* 
+
+- Methods to find the _1%_: PROFILING
+
+
+**1** Simple timing of code
+
+```{python, eval=F}
+tic = time.time()
+
+do_something()
+and_something_else()
+
+toc = time.time()
+
+print(toc - tic)
+```
+
+
+**2** built-in profiler: cProfile (powerful, but complex and limited use)
+
+- cumulative time of every function execution (built-ins and your own)
+	
+- slight overhead
+	
+
+```
+1007 function calls in 0.061 CPU seconds
+
+Ordered by: standard name
+ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+    1    0.000    0.000    0.061    0.061 <string>:1(<module>)
+ 1000    0.051    0.000    0.051    0.000 euler048.py:2(<lambda>)
+    1    0.005    0.005    0.061    0.061 euler048.py:2(<module>)
+    1    0.000    0.000    0.061    0.061 {execfile}
+    1    0.002    0.002    0.053    0.053 {map}
+    1    0.000    0.000    0.000    0.000 {method 'disable' of '_lsprof.Profiler objects}
+    1    0.000    0.000    0.000    0.000 {range}
+    1    0.003    0.003    0.003    0.003 {sum}
+
+```
+
+
+**3** another option: line\_profiler (https://github.com/pyutils/line_profiler)
+
+- easy to use & unobtrusive
+	
+- detailed timings of every single line
+	
+
+```{bash, eval=F}
+pip/conda/mamba install line_profiler
+```
+
+## Two ways to profile {.build}
+
+Easiest way:
+
+- import the line_profiler module
+
+- use the @profile decorator for those functions we want to test
+
+- run the script from the command line with: `kernprof -lv script.py`
+
+
+```{python, eval=F}
+
+import line_profiler
+import numpy as np
+import random
+
+@profile
+def sum_nested_list(nestedList):
+    length = len(nestedList)
+    elements = len(nestedList[0])
+    sums = []
+    listSum = 0
+    for i in range(elements):
+        for j in range(length):
+            listSum += nestedList[j][i]
+        sums.append(listSum)
+        listSum = 0
+    return sums
+
+@profile
+def sum_numpy(nestedlist):
+    sums = np.sum(nestedlist, axis=0)
+    return sums
+
+
+def main():
+    # nestedlist = [ [i, j, k], [l, m, n] ...]
+    nestedlist = []
+    for i in range(int(1e6)):
+        nestedlist.append([random.random(), random.random(), random.random()])
+
+    print(sum_nested_list(nestedlist))
+    print(sum_numpy(np.array(nestedlist)))
+
+
+if __name__ == "__main__":
+    main()
+```
+
+
+## Two ways to profile {.build}
+
+Without using decorators or `kernprof.py`
+
+- instatiate a line_profiler
+
+- wrap the functions that should be profiled
+
+- more flexible, for use in jupyter and other inline coding tools
+
+
+```{python, eval=F}
+import line_profiler
+import numpy as np
+import random
+
+def sum_nested_list(nestedList):
+    length = len(nestedList)
+    elements = len(nestedList[0])
+    sums = []
+    listSum = 0
+    for i in range(elements):
+        for j in range(length):
+            listSum += nestedList[j][i]
+        sums.append(listSum)
+        listSum = 0
+    return sums
+
+def sum_numpy(nestedlist):
+    sums = np.sum(nestedlist, axis=0)
+    return sums
+
+
+def main():
+    # nestedlist = [ [i, j, k], [l, m, n] ...]
+    nestedlist = []
+    for i in range(int(1e6)):
+        nestedlist.append([random.random(), random.random(), random.random()])
+
+    print(sum_nested_list(nestedlist))
+    print(sum_numpy(np.array(nestedlist)))
+
+  
+if __name__ == "__main__":
+    # instantiate a LineProfiler and give all the functions that should be profiled
+    lp = line_profiler.LineProfiler(sum_nested_list, sum_numpy)
+    # wrap the functions with the lp instance
+    sum_nested_list = lp(sum_nested_list)
+    sum_numpy = lp(sum_numpy)
+
+    main()
+
+    lp.print_stats()
+```
+
+
+
+## Sample output
+
+
+```{python, eval=F}
+[500080.5152617638, 499616.38056673005, 499821.04604434676]
+[500080.51526176 499616.38056673 499821.04604435]
+Timer unit: 1e-06 s
+Total time: 2.74852 s
+File: <ipython-input-4-879dfb58e355>
+
+Function: sum_nested_list at line 6
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+     6                                           def sum_nested_list(nestedList):
+     7         1          6.0      6.0      0.0      length = len(nestedList)
+     8         1          2.0      2.0      0.0      elements = len(nestedList[0])
+     9         1          0.0      0.0      0.0      sums = []
+    10         1          0.0      0.0      0.0      listSum = 0
+    11         4          6.0      1.5      0.0      for i in range(elements):
+    12   3000003    1163836.0      0.4     42.3          for j in range(length):
+    13   3000000    1584646.0      0.5     57.7              listSum += nestedList[j][i]
+    14         3         23.0      7.7      0.0          sums.append(listSum)
+    15         3          1.0      0.3      0.0          listSum = 0
+    16         1          0.0      0.0      0.0      return sums
+    
+Total time: 0.021003 s
+File: <ipython-input-4-879dfb58e355>
+Function: sum_numpy at line 19
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+    19                                           def sum_numpy(nestedlist):
+    20         1      21001.0  21001.0    100.0      sums = np.sum(nestedlist, axis=0)
+    21         1          2.0      2.0      0.0      return sums
+
+```
+
+
+## Resources
+
+
+- Official line_profiler repository: https://github.com/pyutils/line_profiler
+
+- Great blog post about it: https://lothiraldan.github.io/2018-02-18-python-line-profiler-without-magic/
+
+- Slides & code of this presentation: https://github.com/W-L/line_profiler_primer
+
+- Very similar package but for memory profiling: https://github.com/pythonprofilers/memory_profiler
+
+
